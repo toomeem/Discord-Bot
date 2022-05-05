@@ -1,4 +1,5 @@
-from pprint import pprint
+import asyncio
+import requests
 import time
 from datetime import datetime
 import pytz
@@ -6,11 +7,9 @@ import discord
 from discord.ext import commands
 import random
 import os
-import requests
 import numpy as np
 from bs4 import BeautifulSoup
 import json
-import asyncio
 import re
 
 client=commands.Bot(command_prefix="!")
@@ -73,236 +72,6 @@ async def end(message):
 		return
 	await client.close()
 
-@client.command(aliases=["bal"])
-async def balance(ctx):
-	if log_command("balance"):
-		return
-	user=ctx.author
-	await open_account(ctx.author)
-	users=await get_bank_data()
-	wallet_amt=users[str(user.id)]["wallet"]
-	bank_amt=users[str(user.id)]["bank"]
-	em=discord.Embed(title=f"{ctx.author.name}'s balance",color=discord.Color.red())
-	em.add_field(name="wallet balance",value=wallet_amt)
-	em.add_field(name="bank balance",value=bank_amt)
-	await ctx.send(content=":money_mouth:",embed=em)
-
-@client.command()
-async def beg(ctx):
-	if log_command("beg"):
-		return
-	user=ctx.author
-	await open_account(user)
-	bal=await update_bank(ctx.author)
-	if bal[0]+bal[1]>50:
-		await ctx.send("You have enough money to get by.")
-		return
-	users=await get_bank_data()
-	earnings=random.randrange(101)
-	await ctx.send(f"Someone gave you {earnings} coins!")
-	users[str(user.id)]["wallet"]+=earnings
-	with open("text_files/main_bank.json","w") as f:
-		json.dump(users,f)
-
-
-@client.command(aliases=["wd"])
-async def withdraw(ctx,amount=None):
-	if log_command("withdraw"):
-		return
-	await open_account(ctx.author)
-	bal=await update_bank(ctx.author)
-	if amount==None:
-		await ctx.send("Please enter the amount")
-		return
-	elif amount=="all":
-		amount=bal[1]
-	amount=int(amount)
-	if amount>bal[1]:
-		await ctx.send("You don't have that much money!")
-		return
-	elif amount<0:
-		await ctx.send("Amount must be positive!")
-		return
-	await update_bank(ctx.author,amount)
-	await update_bank(ctx.author,-1*amount,"bank")
-	await ctx.send(f"You withdrew {amount} coins!")
-
-@client.command(aliases=["dp"])
-async def deposit(ctx,amount=None):
-	if log_command("deposit"):
-		return
-	await open_account(ctx.author)
-	bal=await update_bank(ctx.author)
-	if amount==None:
-		await ctx.send("Please enter the amount")
-		return
-	elif amount=="all":
-		amount=bal[0]
-	amount=int(amount)
-	if amount>bal[0]:
-		await ctx.send("You don't have that much money!")
-		return
-	elif amount<0:
-		await ctx.send("Amount must be positive!")
-		return
-	await update_bank(ctx.author,-1*amount)
-	await update_bank(ctx.author,amount,"bank")
-	await ctx.send(f"You deposited {amount} coins!")
-
-@client.command()
-async def send(ctx,amount=None,*,arg:discord.Member):
-	if log_command("send"):
-		return
-	await open_account(ctx.author)
-	await open_account(arg)
-	bal=await update_bank(ctx.author)
-	if amount==None:
-		await ctx.send("Please enter the amount")
-		return
-	if amount=="all":
-		amount=bal[0]
-	amount=int(amount)
-	if amount>bal[0]:
-		await ctx.send("You don't have that much money!")
-		return
-	elif amount<0:
-		await ctx.send("Amount must be positive!")
-		return
-	await update_bank(ctx.author,-1*amount,"bank")
-	await update_bank(arg,amount,"bank")
-	await ctx.send(f"You gave {amount} coins!")
-
-@client.command()
-async def slots(ctx,amount=None):
-	if log_command("slots"):
-		return
-	await open_account(ctx.author)
-	bal=await update_bank(ctx.author)
-	if amount==None:
-		await ctx.send("Please enter the amount")
-		return
-	elif amount=="all":
-		amount=bal[0]
-	amount=int(amount)
-	if amount>bal[0]:
-		await ctx.send("You don't have that much money!")
-		return
-	elif amount<0:
-		await ctx.send("Amount must be positive!")
-		return
-	em=discord.Embed(title="Slot Machine")
-	final=""
-	for i in range(3):
-		a=random.choice(["X","O"])
-		final+=a
-	em.add_field(value=final)
-	await ctx.send(content="$$$",embed=em)
-	if final[0]==final[1] and final[0]==final[2] and final[1]==final[2]:
-		await update_bank(ctx.author,3*amount)
-		await ctx.send(f"You won {amount} coins!")
-	else:
-		await update_bank(ctx.author,-1*amount)
-		await ctx.send(f"You lost {amount} coins!")
-
-@client.command()
-async def rob(ctx,*,arg:discord.Member):
-	if log_command("rob"):
-		return
-	await open_account(ctx.author)
-	await open_account(arg)
-	bal=await update_bank(arg)
-	if bal[0]<100:
-		await ctx.send(f"{arg} doesn't have enough money!")
-		return
-	earnings=random.randrange(0,bal[0])
-	await update_bank(ctx.author,earnings)
-	await update_bank(arg,-1*earnings)
-	await ctx.send(f"You stole {earnings} from {arg}")
-
-@client.command()
-async def shop(ctx):
-	if log_command("shop"):
-		return
-	em=discord.Embed(title="Shop")
-	for item in main_shop:
-		name=item["name"]
-		price=item["price"]
-		desc=item["description"]
-		em.add_field(name=name,value=f"${price} | {desc}")
-	await ctx.send(content=":handshake:",embed=em)
-
-@client.command()
-async def buy(ctx,item,amount=1):
-	if log_command("buy"):
-		return
-	await open_account(ctx.author)
-	res=await buy_this(ctx.author,item,amount)
-	if not res[0]:
-		if res[1]==1:
-			await ctx.send("That object isn't there!")
-			return
-		elif res[1]==2:
-			await ctx.send("You don't have enough money in your wallet to buy this")
-			return
-	await ctx.send(f"You just bought {amount} {item}")
-
-@client.command()
-async def bag(ctx):
-	if log_command("bag"):
-		return
-	await open_account(ctx.author)
-	user=ctx.author
-	users=await get_bank_data()
-	try:
-		bag=users[str(user.id)]["bag"]
-	except:
-		await ctx.send("You don't have any items")
-		return
-	em=discord.Embed(title="Your Bag")
-	for item in bag:
-		name=item["item"]
-		amount=item["amount"]
-		em.add_field(name=name,value=amount)
-	await ctx.send(content=":face_with_monocle:",embed=em)
-
-@client.command()
-async def sell(ctx,item,amount=1):
-	if log_command("sell"):
-		return
-	await open_account(ctx.author)
-	res=await sell_this(ctx.author,item,amount)
-	if not res[0]:
-		if res[1]==1:
-			await ctx.send("That object isn't there!")
-			return
-		elif res[1]==2:
-			await ctx.send(f"You don't have {amount} {item} in your bag")
-			return
-	await ctx.send(f"You just sold {amount} {item}")
-
-@client.command(aliases=["lb"])
-async def leaderboard(ctx,x=3):
-	if log_command("leaderboard"):
-		return
-	users=await get_bank_data()
-	if x>len(users):
-		x=1
-	leader_board={}
-	total=[users[user]["bank"]+users[user]["wallet"] for user in users]
-	for user in users:
-		leader_board[total]=int(user)
-	total=sorted(total,reverse=True)
-	em=discord.Embed(title=f"Top {x} richest members",color=discord.Color.red())
-	index=1
-	for amt in total:
-		member=await client.fetch_user(leader_board[amt])
-		name=member.name
-		em.add_field(name=f"{index}. {name}",value=f"{amt}",inline=False)
-		if index==x:
-			break
-		else:
-			index+=1
-	await ctx.send(content="Leaderboard",embed=em)
 
 @client.command(aliases=["the earth king has invited you to lake laogai"])
 async def the_earth_king_has_invited_you_to_lake_laogai(ctx):
@@ -422,23 +191,6 @@ async def battery(ctx):
 	await ctx.send(f"{percent}%")
 
 @client.command()
-async def suggest(ctx, *args):
-	if log_command("suggest"):
-		return
-	with open("text_files/suggestions","a") as suggestions:
-		if "str" in str(type(suggestions)):
-			suggestions.write(f"{args}\n")
-		else:
-			args=" ".join(args)
-			suggestions.write(f"{args}\n")	
-	await asyncio.sleep(3)
-	await ctx.send("Sorry I am a slow reader.")
-	await asyncio.sleep(2)
-	await ctx.send("That looks like a good suggestion, I will pass it along.")
-	await asyncio.sleep(1)
-	await ctx.send("Thanks!")
-
-@client.command()
 async def quote(ctx):
 	if log_command("quote"):
 		return
@@ -459,18 +211,6 @@ async def school(ctx):
 	em.add_field(name="Days till school is over",value=str(np.round(285-left/24,1)))
 	await ctx.send(content=":nerd:",embed=em)
 
-@client.command(aliases=["coming soon"])
-async def coming(ctx):
-	if log_command("coming soon"):
-		return
-	with open("text_files/coming_soon") as coming_soon_file:
-		coming_soon=coming_soon_file.readlines()
-	if coming_soon!=[]:
-		await ctx.send("Features on the way")
-		for i in coming_soon:
-			await ctx.send(i)
-	else:
-		await ctx.send("Nothing")			
 @client.command()
 async def scan(ctx,keyword):
 	if log_command("scan"):
@@ -532,7 +272,6 @@ async def commands(ctx):
 	,"profit":"sends the net profit from all  of Evan's crypto assets"
 	,"weather":"sends a brief overview of the current weather conditions where Evan lives"
 	,"battery":"sends the suggested amount of battery remaining on your phone to make it through the school day with 10% remaining"
-	,"suggest ___":"reads and logs any suggestions"
 	,"quote":"sends a random quote"
 	,"school":"sends how much summer break is left"
 	,"coming soon":"sends a list of features that will be added soon in order of importance"
@@ -1134,7 +873,7 @@ async def event_loop():
 					error_list=list(errors.readlines())
 					if len(error_list)>100000:
 						await channel.send("OVER 100,000 ERRORS, FIX IMMEDIATELY!")
-					elif len(error_list)>1000:
+					elif len(error_list)>10000:
 						await channel.send("Over 10,000 errors, fix it soon.")
 					elif len(error_list)>1000:
 						await channel.send("Over 1,000 erros, check it out sometime soon.")
@@ -1152,15 +891,3 @@ client.loop.create_task(event_loop())
 client.run(os.getenv("TOKEN"))
 
 
-'''
-	to maybe add later for economy bot
-
-multiple banks
-bank fees
-loans
-higher/lower
-bank heists
-blackjack
-credit scores
-
-'''
