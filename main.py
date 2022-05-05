@@ -13,9 +13,6 @@ import json
 import re
 
 client=commands.Bot(command_prefix="!")
-main_shop=[{"name":"Watch","price":100,"description":"to tell time"},
-		{"name":"Laptop","price":1000,"description":"for doing work"},
-		{"name":"PC","price":10000,"description":"for gaming"}]
 evan_schedule={# norm/early/hr_early/2hr_delay
 	"06:28/06:28":"Hurry up!",
 	"07:16/no":"E23",
